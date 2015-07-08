@@ -6,6 +6,13 @@ To use:
     brew bundle
     ./convert path/to/movie.mov  output-name-without-extension
 
-Files will be written to the `./output` directory.
+This will output the following files:
+
+    output/
+      index.html
+      player.swf
+      output-name.jpg
+      output-name.webm
+      output-name.mp4
 
 player.swf was lovingly stolen from <https://github.com/csscallum/HTML5-Video>
