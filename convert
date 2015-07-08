@@ -1,0 +1,92 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'streamio-ffmpeg'
+require 'fileutils'
+
+RESOLUTION="800x480"
+WIDTH = RESOLUTION.split('x')[0]
+HEIGHT = RESOLUTION.split('x')[1]
+
+usage = <<EOF
+Usage: ./convert path/to/movie.mov  output-name-without-extension
+EOF
+
+if ARGV.length != 2
+  puts usage
+  exit 1
+end
+
+path = ARGV[0]
+output_name = ARGV[1]
+
+FileUtils.mkdir_p("./output")
+
+begin
+  movie = FFMPEG::Movie.new(path)
+rescue Exception => e
+  puts e
+  puts usage
+  exit 1
+end
+
+baseopts = {
+  resolution: RESOLUTION,
+  video_min_bitrate: 200,
+  video_max_bitrate: 600,
+  audio_channels: 2,
+  threads: 4,
+  custom: '-strict -2'
+}
+
+mp4opts = baseopts.merge({
+  video_codec: "libx264",
+  frame_rate: 10,
+  buffer_size: 2000,
+  audio_codec: "libfdk_aac",
+  audio_bitrate: 32,
+  audio_sample_rate: 22050
+})
+
+webmopts = baseopts.merge({
+  video_codec: "libvpx",
+  audio_codec: "vorbis",
+  audio_bitrate: 32,
+  audio_sample_rate: 22050
+})
+
+def format_percentage(number)
+  return (number * 100).round(2).to_s + "%\r"
+end
+
+puts "---> 1 of 3 - Taking Screenshot"
+movie.screenshot("./output/#{output_name}.jpg", seek_time: movie.duration / 8, resolution: RESOLUTION)
+
+puts "---> 2 of 3 - Encoding MP4"
+movie.transcode("./output/#{output_name}.mp4", mp4opts) { |progress| print format_percentage(progress); $stdout.flush }
+
+puts "---> 3 of 3 - Encoding WebM"
+movie.transcode("./output/#{output_name}.webm", webmopts) { |progress| print format_percentage(progress); $stdout.flush }
+
+html = <<EOF
+<!DOCTYPE html>
+<html>
+<body>
+    <video poster="#{output_name}.jpg" controls width="#{WIDTH}" height="#{HEIGHT}">
+        <source src="#{output_name}.mp4" type="video/mp4">
+        <source src="#{output_name}.webm" type="video/webm">
+        <object type="application/x-shockwave-flash" data="player.swf" width="#{WIDTH}" height="#{HEIGHT}">
+            <param name="allowfullscreen" value="true">
+            <param name="allowscriptaccess" value="always">
+            <param name="flashvars" value="file=#{output_name}.mp4">
+            <!--[if IE]><param name="movie" value="player.swf"><![endif]-->
+            <p>Your browser can't play HTML5 video. <a href="#{output_name}.webm"> Download it</a> instead.</p>
+        </object>
+    </video>
+</body>
+</html>
+EOF
+
+File.open('./output/index.html', 'w') { |file| file.write(html) }
+
+FileUtils.cp('./player.swf', './output/player.swf')
